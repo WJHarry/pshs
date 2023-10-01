@@ -15,13 +15,13 @@ func reverse(s []string) {
 }
 
 func filter(slice []string, f func(string) bool) []string {
-    var n []string
-    for _, e := range slice {
-        if f(e) {
-            n = append(n, e)
-        }
-    }
-    return n
+	var n []string
+	for _, e := range slice {
+		if f(e) {
+			n = append(n, e)
+		}
+	}
+	return n
 }
 
 func checkPsOrCmd() string {

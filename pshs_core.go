@@ -3,11 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/gdamore/tcell"
 	"github.com/gdamore/tcell/encoding"
 )
+
+// 0: normal 1: regxep
+var mode int8 = 0
 
 func showHistory(fullHistoryList []string) {
 	encoding.Register()
@@ -21,6 +25,7 @@ func showHistory(fullHistoryList []string) {
 
 	screen.Clear()
 	drawSearch(screen)
+	screen.Show()
 
 	for i, history := range fullHistoryList {
 		fullHistoryList[i] = history + "\t"
@@ -29,12 +34,11 @@ func showHistory(fullHistoryList []string) {
 	historyList := fullHistoryList
 	drawHistory(screen, historyList, 0)
 	highLightLine(screen, 0, historyList[0], 0)
+
 	offset := 0
 	currentLine := 0
 
-	searchStyle := tcell.StyleDefault.Foreground(tcell.ColorPink).Background(tcell.ColorDefault)
 	searchText := ""
-
 	selectHistory := ""
 
 	for {
@@ -49,12 +53,12 @@ func showHistory(fullHistoryList []string) {
 			drawHistory(screen, historyList[offset:], offset)
 			highLightLine(screen, currentLine, historyList[currentLine], offset)
 		case *tcell.EventKey:
-			if ev.Key() == tcell.KeyDown {
+			if ev.Key() == tcell.KeyDown || ev.Key() == tcell.KeyCtrlN {
 				if currentLine == len(historyList) - 1 {
 					continue
 				}
 				_, height := screen.Size()
-				if currentLine - offset == height - 5 {
+				if currentLine - offset == height - 6 {
 					offset++
 					screen.Clear()
 					drawSearch(screen)
@@ -64,7 +68,7 @@ func showHistory(fullHistoryList []string) {
 				currentLine++
 				highLightLine(screen, currentLine - offset, historyList[currentLine], offset)
 				screen.Size()
-			} else if ev.Key() == tcell.KeyUp {
+			} else if ev.Key() == tcell.KeyUp || ev.Key() == tcell.KeyCtrlP {
 				if currentLine == 0 {
 					continue
 				}
@@ -87,10 +91,8 @@ func showHistory(fullHistoryList []string) {
 					continue
 				}
 				searchText += string(ev.Rune())
+				historyList, _ := searchHistory(searchText, fullHistoryList)
 
-				historyList = filter(fullHistoryList, func(history string) bool {
-					return strings.Contains(history, searchText)
-				})
 				screen.Clear()
 				offset = 0
 				currentLine = 0
@@ -110,11 +112,25 @@ func showHistory(fullHistoryList []string) {
 					historyList = fullHistoryList
 				} else {
 					searchText = searchText[:len(searchText)-1]
-					historyList = filter(fullHistoryList, func(history string) bool {
-						return strings.Contains(history, searchText)
-					})
+					historyList, _ = searchHistory(searchText, fullHistoryList)
 				}
 				screen.Clear()
+				offset = 0
+				currentLine = 0
+				drawSearch(screen)
+				drawText(screen, 1, 1, searchStyle, searchText)
+				if len(historyList) > 0 {
+					drawHistory(screen, historyList[offset:], offset)
+					highLightLine(screen, currentLine, historyList[currentLine], offset)
+				}
+			} else if ev.Key() == tcell.KeyCtrlR {
+				screen.Clear()
+				if mode == 0 {
+					mode = 1
+				} else {
+					mode = 0
+				}
+				historyList, _ := searchHistory(searchText, fullHistoryList)
 				offset = 0
 				currentLine = 0
 				drawSearch(screen)
@@ -131,4 +147,26 @@ exit:
 	screen.Fini()
 
 	fmt.Println(selectHistory)
+}
+
+
+func searchHistory(searchText string, fullHistoryList []string) ([]string, bool) {
+	if mode == 0 {
+		return filter(fullHistoryList, func(history string) bool {
+			return strings.Contains(history, searchText)
+		}), true
+	} else {
+		re, err := regexp.Compile(searchText)
+		if err != nil {
+			return nil, false
+		}
+
+		var result []string
+		for _, history := range fullHistoryList {
+			if re.MatchString(history) {
+				result = append(result, history)
+			}
+		}
+		return result, true
+	}
 }
